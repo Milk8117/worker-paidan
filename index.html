@@ -109,22 +109,6 @@
       display: none !important;
     }
 
-    /* 浮球提示箭头 */
-    .sdk-hint-arrow {
-      position: fixed;
-      bottom: 80px;
-      right: 28px;
-      font-size: 28px;
-      animation: bounce-down 1s ease-in-out infinite;
-      z-index: 9999;
-      pointer-events: none;
-      filter: drop-shadow(0 2px 6px rgba(236,114,16,0.5));
-    }
-    @keyframes bounce-down {
-      0%, 100% { transform: translateY(0); opacity: 1; }
-      50% { transform: translateY(10px); opacity: 0.6; }
-    }
-
     #chat-loading {
       display: inline-block;
       background: rgba(236,114,16,0.9);
@@ -158,61 +142,37 @@
   <!-- 聊天页 -->
   <div id="chat-page"></div>
 
+  <!-- JSRSASIGN for JWT signing -->
+  <script src="https://cdn.jsdelivr.net/npm/jsrsasign@11.1.0/lib/jsrsasign-min.js"></script>
+
   <script>
-    const BOT_ID = '7652596501499772968'; // 师傅端Bot
-    const phoneInput = document.getElementById('phoneInput');
-    const enterBtn = document.getElementById('enterBtn');
-    const loginPage = document.getElementById('login-page');
-    const chatPage = document.getElementById('chat-page');
-
-    // 手机号验证
-    phoneInput.addEventListener('input', function() {
-      this.value = this.value.replace(/\D/g, '');
-      enterBtn.disabled = this.value.length !== 11;
-    });
-
-    // 回车提交
-    phoneInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && !enterBtn.disabled) {
-        enterBtn.click();
-      }
-    });
-
-    // 进入聊天
-    enterBtn.addEventListener('click', function() {
-      const phone = phoneInput.value.trim();
-      if (phone.length !== 11) return;
-
-      loginPage.style.display = 'none';
-      chatPage.style.display = 'block';
-
-      // 动态加载Coze Chat SDK
-      const script = document.createElement('script');
-      script.src = 'https://sf-cdn.coze.com/obj/unpkg-va/1.2.0-beta.20/coze-chat-sdk.umd.js';
-      script.onload = function() {
-        new CozeWebSDK.WebChatClient({
-          botId: BOT_ID,
-          userId: phone,
-          sessionName: 'worker_' + phone,
-          onClose: function() {
-            chatPage.style.display = 'none';
-            loginPage.style.display = 'flex';
-          }
-        });
-
-        // 添加提示箭头
-        const arrow = document.createElement('div');
-        arrow.className = 'sdk-hint-arrow';
-        arrow.textContent = '👇';
-        document.body.appendChild(arrow);
-
-        // 3秒后隐藏箭头
-        setTimeout(function() {
-          arrow.style.display = 'none';
-        }, 3000);
-      };
-      document.head.appendChild(script);
-    });
-  </script>
-</body>
-</html>
+    // === OAuth JWT Configuration ===
+    var ISS = '1199212001020';
+    var KID = 'tsfTukA85NQ4TDqx3uGim2L_CfxqtwWtQXguJGaEsJU';
+    var BOT_ID = '7652596501499772968'; // 师傅端Bot
+    var PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\n' +
+      'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCxZgtRZP6wS2oy\n' +
+      '8iz5U/y+BKa3dGb2fiBJoTqKzfVwvnGGRLTcFptaTUri3jUrCSE9RNaeCrePjwKE\n' +
+      'L9O3R/wqxDRns/Z0C0/bUBuVDSUhaz1ZWNukvmIWT8L+ENhf9V2f1uEAzYvezAQ9\n' +
+      'tHCeYkExgZeO2EMeIk9bp+GioxC4D12mlHZZxhEfmOxQPka6UFuIIZG8a4xnPVVW\n' +
+      'uVOOmizRBeoYxAIdbLukKBJgmRWjhbXdVElGLuZSoEDEuy1laFMuhPwUmMne9VBM\n' +
+      'o8iDoT6bF+TD3hu86bqwhnG8M/p5ycqaeMaDlsq/xhLaFuvzGI/QOlYsYGm/Ax+h\n' +
+      'nE1I+63RAgMBAAECggEAA0zeQmjpfFJYhEsT4z2mJ2s+8QLS+MxaREu8ovkPjds2\n' +
+      '0arg7hHZWRPpqWMdXFAUsJ8BireGiFQeivgjD/SF0bjxruQhePw+I5rNGuVKMDHJ\n' +
+      'G+q6rNkfdOdDWIPL67aXo8iXtLgDjXJlvze2deWG7WwUq6CU4z2mX21ApfcocX0h\n' +
+      '7h0AHVWZna5960DA8+HJMBaPN4L60ES3Py1ojr+yD6sPeL62Oq6lGe3ZhZiNaVJI\n' +
+      '1UFatQV0iKqwGAXLyRpI+V4hCxnbtPaYusy6jkxwULrB8sdt5HM7lU4aj6hGgLTD\n' +
+      'A645cde3LWSb9prkMZIZ9VIlt6ulN8EHulEaWlF3QQKBgQDVI90qJNINiKFEXdrA\n' +
+      'jJ3RDtNzoYqG2UQ2AHLs2TBLM8Iwr+Suah10T4JT026jYhcincQ5EMCncpQtx86h\n' +
+      'sQyaF7i0ovG3jMPzBnp+FRdw6dp6sZWv4vA50yU4DEIRKZmKbUbm8oTq48Y0V4hd\n' +
+      'fgdpRmB3yiMeEt8g7qkp9r6ekQKBgQDVEkL/RT8No8L43nZcU62MWcREFe4AiZ+M\n' +
+      '0HvMMyvL9HRrtsam/QffnMgwg77QXZZ9Q2GvhJpXMD5ggEB/xmsUDnpo8mfu5Uy4\n' +
+      'avrsH7R1x92/1gD6ewVGyHCcnGC5SEtKVS/+BjmX/gY1CInmk+fLMk+wJm+WzRWR\n' +
+      'WJ/XTGo7QQKBgCT7GwWT6+ozOZ/uFOVxwHQkeWXHsoxhKCeifk5ABNQXf+sIqcnl\n' +
+      'WYTzwq4eskSg4Vi9PO2VzYeAJtumnmCJoqEd2otk9kGdp+YDyr8Tk8SgnqrJIyqo\n' +
+      'Wnv9+ag24EOwDxbojPPHQm6q5JnyUhO+qTSH5HcEWIGATrydDDbevAYxAoGALKHG\n' +
+      'pvI6YwEKtlbjNDPTBrNHCXwOfs5VPYnuZLfTVMXAHVAMDK60F4Mf7AmszrjL7TFQ\n' +
+      'JRQBwIG6jzxORnWpuGnP+mvMmZ4uk/LU3OFHS+Sx7p1FVzKtyEX0UNnw6N7b5pYx\n' +
+      'l2R2bAAqDLHdMQ+KXmYLizqB5XTQL8IAuXioSAECgYEAspZtT4rWB+g44EOPqgTQ\n' +
+      'f+oajUAFO+5fr7hKrroXbZ5nbmzphUW9iCq1XIbAXXEwZ26OhoYFX73J7MXdD9QH\n' +
+      'UE5x40plpip9kpytqNFWqWRNDbVuT7Bl55
