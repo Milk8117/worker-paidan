@@ -123,6 +123,8 @@
   </style>
   <!-- JSRSASIGN loaded from same origin -->
   <script src="./jsrsasign-all-min.js"></script>
+  <!-- Coze Chat SDK (国内CDN) -->
+  <script src="https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0-beta.20/libs/cn/index.js"></script>
 </head>
 <body>
 
@@ -256,42 +258,37 @@
         loginPage.style.display = 'none';
         chatPage.style.display = 'block';
 
-        // 动态加载Coze Chat SDK
-        var script = document.createElement('script');
-        script.src = 'https://sf-cdn.coze.com/obj/unpkg-va/1.2.0-beta.20/coze-chat-sdk.umd.js';
-        script.onload = function() {
-          new CozeWebSDK.WebChatClient({
-            config: {
-              type: 'bot',
-              bot_id: BOT_ID,
+        // 直接初始化Coze Chat SDK（已在head预加载）
+        new CozeWebSDK.WebChatClient({
+          config: {
+            type: 'bot',
+            bot_id: BOT_ID,
+          },
+          auth: {
+            type: 'token',
+            token: accessToken,
+            onRefreshToken: async function() {
+              var newJwt = signJWT(sessionName);
+              return await getAccessToken(newJwt);
             },
-            auth: {
-              type: 'token',
-              token: accessToken,
-              onRefreshToken: async function() {
-                var newJwt = signJWT(sessionName);
-                return await getAccessToken(newJwt);
-              },
+          },
+          userInfo: {
+            id: phone,
+            nickname: '师傅' + phone.substr(-4),
+          },
+          ui: {
+            base: {
+              icon: 'https://lf-coze-web-cdn.coze.cn/obj/eden-cn/lm-lgvj/ljhwZthlaukjlkulzlp/coze/chatsdk-logo.png',
+              layout: 'mobile',
+              lang: 'zh-CN',
+              zIndex: 1000,
             },
-            userInfo: {
-              id: phone,
-              nickname: '师傅' + phone.substr(-4),
-            },
-            ui: {
-              base: {
-                icon: 'https://lf-coze-web-cdn.coze.cn/obj/eden-cn/lm-lgvj/ljhwZthlaukjlkulzlp/coze/chatsdk-logo.png',
-                layout: 'mobile',
-                lang: 'zh-CN',
-                zIndex: 1000,
-              },
-              header: { isShow: true, isNeedClose: true },
-              asstBtn: { isNeed: true },
-              footer: { isShow: true, expressionText: '派单助手 · 师傅端' },
-              chatBot: { title: '派单助手', uploadable: false, width: 390 },
-            },
-          });
-        };
-        document.head.appendChild(script);
+            header: { isShow: true, isNeedClose: true },
+            asstBtn: { isNeed: true },
+            footer: { isShow: true, expressionText: '派单助手 · 师傅端' },
+            chatBot: { title: '派单助手', uploadable: false, width: 390 },
+          },
+        });
       } catch (err) {
         console.error('Auth failed:', err);
         enterBtn.disabled = false;
