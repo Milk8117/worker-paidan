@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>派单助手 - 师傅端</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+
+    /* 登录页 */
+    #login-page {
+      max-width: 380px;
+      width: 100%;
+    }
+    .app-icon {
+      width: 72px;
+      height: 72px;
+      background: #ec7210;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      margin: 0 auto 12px;
+    }
+    .app-title {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .app-subtitle {
+      font-size: 15px;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 36px;
+    }
+    .input-group {
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 24px 20px;
+      margin-bottom: 16px;
+    }
+    .input-label {
+      font-size: 14px;
+      color: rgba(255,255,255,0.65);
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    .phone-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      font-size: 18px;
+      letter-spacing: 2px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .phone-input::placeholder { color: rgba(255,255,255,0.25); letter-spacing: 1px; }
+    .phone-input:focus { border-color: #ec7210; }
+    .enter-btn {
+      width: 100%;
+      padding: 15px;
+      background: #ec7210;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      margin-top: 6px;
+    }
+    .enter-btn:active { transform: scale(0.98); }
+    .enter-btn:disabled { background: rgba(236,114,16,0.4); cursor: not-allowed; }
+    .hint-text {
+      font-size: 13px;
+      color: rgba(255,255,255,0.35);
+      margin-top: 20px;
+    }
+
+    /* 聊天页 */
+    #chat-page {
+      display: none;
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+    }
+
+    /* 隐藏推荐问题按钮 */
+    [class*="suggestion"], [class*="recommended"], [class*="quick-reply"],
+    [class*="question-item"], [class*="prompt-item"] {
+      display: none !important;
+    }
+
+    /* 浮球提示箭头 */
+    .sdk-hint-arrow {
+      position: fixed;
+      bottom: 80px;
+      right: 28px;
+      font-size: 28px;
+      animation: bounce-down 1s ease-in-out infinite;
+      z-index: 9999;
+      pointer-events: none;
+      filter: drop-shadow(0 2px 6px rgba(236,114,16,0.5));
+    }
+    @keyframes bounce-down {
+      0%, 100% { transform: translateY(0); opacity: 1; }
+      50% { transform: translateY(10px); opacity: 0.6; }
+    }
+
+    #chat-loading {
+      display: inline-block;
+      background: rgba(236,114,16,0.9);
+      color: #fff;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      animation: pulse 1.5s ease-in-out infinite;
+      margin-top: 12px;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <!-- 登录页 -->
+  <div id="login-page">
+    <div class="app-icon">🔧</div>
+    <div class="app-title">派单助手</div>
+    <div class="app-subtitle">师傅端 · 看单 · 出发 · 完工</div>
+
+    <div class="input-group">
+      <div class="input-label">输入您的手机号</div>
+      <input class="phone-input" id="phoneInput" type="tel" maxlength="11" placeholder="手机号即您的工号" inputmode="numeric" pattern="[0-9]*">
+      <button class="enter-btn" id="enterBtn" disabled>进入工作台</button>
+    </div>
+
+    <div class="hint-text">首次使用？直接输入手机号即可</div>
+  </div>
+
+  <!-- 聊天页 -->
+  <div id="chat-page"></div>
+
+  <script>
+    const BOT_ID = '7652596501499772968'; // 师傅端Bot
+    const phoneInput = document.getElementById('phoneInput');
+    const enterBtn = document.getElementById('enterBtn');
+    const loginPage = document.getElementById('login-page');
+    const chatPage = document.getElementById('chat-page');
+
+    // 手机号验证
+    phoneInput.addEventListener('input', function() {
+      this.value = this.value.replace(/\D/g, '');
+      enterBtn.disabled = this.value.length !== 11;
+    });
+
+    // 回车提交
+    phoneInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !enterBtn.disabled) {
+        enterBtn.click();
+      }
+    });
+
+    // 进入聊天
+    enterBtn.addEventListener('click', function() {
+      const phone = phoneInput.value.trim();
+      if (phone.length !== 11) return;
+
+      loginPage.style.display = 'none';
+      chatPage.style.display = 'block';
+
+      // 动态加载Coze Chat SDK
+      const script = document.createElement('script');
+      script.src = 'https://sf-cdn.coze.com/obj/unpkg-va/1.2.0-beta.20/coze-chat-sdk.umd.js';
+      script.onload = function() {
+        new CozeWebSDK.WebChatClient({
+          botId: BOT_ID,
+          userId: phone,
+          sessionName: 'worker_' + phone,
+          onClose: function() {
+            chatPage.style.display = 'none';
+            loginPage.style.display = 'flex';
+          }
+        });
+
+        // 添加提示箭头
+        const arrow = document.createElement('div');
+        arrow.className = 'sdk-hint-arrow';
+        arrow.textContent = '👇';
+        document.body.appendChild(arrow);
+
+        // 3秒后隐藏箭头
+        setTimeout(function() {
+          arrow.style.display = 'none';
+        }, 3000);
+      };
+      document.head.appendChild(script);
+    });
+  </script>
+</body>
+</html>
