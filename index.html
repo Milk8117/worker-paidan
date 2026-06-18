@@ -144,6 +144,11 @@
 
   <!-- JSRSASIGN for JWT signing -->
   <script src="https://cdn.jsdelivr.net/npm/jsrsasign@11.1.0/lib/jsrsasign-min.js"></script>
+  <script>
+    if (typeof KJUR === 'undefined') {
+      document.write('<script src="https://unpkg.com/jsrsasign@11.1.0/lib/jsrsasign-min.js"><\/script>');
+    }
+  </script>
 
   <script>
     // === OAuth JWT Configuration ===
@@ -175,4 +180,130 @@
       'JRQBwIG6jzxORnWpuGnP+mvMmZ4uk/LU3OFHS+Sx7p1FVzKtyEX0UNnw6N7b5pYx\n' +
       'l2R2bAAqDLHdMQ+KXmYLizqB5XTQL8IAuXioSAECgYEAspZtT4rWB+g44EOPqgTQ\n' +
       'f+oajUAFO+5fr7hKrroXbZ5nbmzphUW9iCq1XIbAXXEwZ26OhoYFX73J7MXdD9QH\n' +
-      'UE5x40plpip9kpytqNFWqWRNDbVuT7Bl55
+      'UE5x40plpip9kpytqNFWqWRNDbVuT7Bl554y5ItGlwUmItMG3Fg3kNZv3vadHjVh\n' +
+      'vCP+57T4M6pAEjiPfJRewmc=\n' +
+      '-----END PRIVATE KEY-----';
+
+    var phoneInput = document.getElementById('phoneInput');
+    var enterBtn = document.getElementById('enterBtn');
+    var loginPage = document.getElementById('login-page');
+    var chatPage = document.getElementById('chat-page');
+
+    // 手机号验证
+    phoneInput.addEventListener('input', function() {
+      this.value = this.value.replace(/\D/g, '');
+      enterBtn.disabled = this.value.length !== 11;
+    });
+
+    // 回车提交
+    phoneInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !enterBtn.disabled) {
+        enterBtn.click();
+      }
+    });
+
+    // === Sign JWT with RS256 ===
+    function signJWT(sessionName) {
+      var header = { alg: 'RS256', typ: 'JWT', kid: KID };
+      var now = Math.floor(Date.now() / 1000);
+      var payload = {
+        iss: ISS,
+        aud: 'api.coze.cn',
+        iat: now,
+        exp: now + 3600,
+        jti: Math.random().toString(36).substr(2) + Date.now().toString(36),
+        session_name: sessionName
+      };
+      return KJUR.jws.JWS.sign('RS256', JSON.stringify(header), JSON.stringify(payload), PRIVATE_KEY);
+    }
+
+    // === Exchange JWT for OAuth access token ===
+    async function getAccessToken(jwt) {
+      var resp = await fetch('https://api.coze.cn/api/permission/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + jwt,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          duration_seconds: 86399
+        })
+      });
+      var json = await resp.json();
+      var token = json.access_token || (json.data && json.data.access_token);
+      if (!token) {
+        console.error('Token exchange failed:', json);
+        throw new Error('No access token: ' + (json.msg || JSON.stringify(json)));
+      }
+      return token;
+    }
+
+    // 进入聊天
+    enterBtn.addEventListener('click', async function() {
+      var phone = phoneInput.value.trim();
+      if (phone.length !== 11) return;
+
+      enterBtn.disabled = true;
+      enterBtn.textContent = '连接中...';
+
+      try {
+        // 检查JSRSASIGN是否加载
+        if (typeof KJUR === 'undefined') {
+          throw new Error('加密库未加载，请刷新页面重试');
+        }
+
+        // 用手机号作为session_name实现会话隔离
+        var sessionName = 'worker_' + phone;
+        var jwt = signJWT(sessionName);
+        var accessToken = await getAccessToken(jwt);
+
+        loginPage.style.display = 'none';
+        chatPage.style.display = 'block';
+
+        // 动态加载Coze Chat SDK
+        var script = document.createElement('script');
+        script.src = 'https://sf-cdn.coze.com/obj/unpkg-va/1.2.0-beta.20/coze-chat-sdk.umd.js';
+        script.onload = function() {
+          new CozeWebSDK.WebChatClient({
+            config: {
+              type: 'bot',
+              bot_id: BOT_ID,
+            },
+            auth: {
+              type: 'token',
+              token: accessToken,
+              onRefreshToken: async function() {
+                var newJwt = signJWT(sessionName);
+                return await getAccessToken(newJwt);
+              },
+            },
+            userInfo: {
+              id: phone,
+              nickname: '师傅' + phone.substr(-4),
+            },
+            ui: {
+              base: {
+                icon: 'https://lf-coze-web-cdn.coze.cn/obj/eden-cn/lm-lgvj/ljhwZthlaukjlkulzlp/coze/chatsdk-logo.png',
+                layout: 'mobile',
+                lang: 'zh-CN',
+                zIndex: 1000,
+              },
+              header: { isShow: true, isNeedClose: true },
+              asstBtn: { isNeed: true },
+              footer: { isShow: true, expressionText: '派单助手 · 师傅端' },
+              chatBot: { title: '派单助手', uploadable: false, width: 390 },
+            },
+          });
+        };
+        document.head.appendChild(script);
+      } catch (err) {
+        console.error('Auth failed:', err);
+        enterBtn.disabled = false;
+        enterBtn.textContent = '进入工作台';
+        alert('连接失败：' + err.message);
+      }
+    });
+  </script>
+</body>
+</html>
