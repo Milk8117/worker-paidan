@@ -120,6 +120,7 @@
       margin-top: 12px;
     }
     @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    @keyframes bounce-arrow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(14px); } }
   </style>
   <!-- JSRSASIGN loaded from same origin -->
   <script src="./jsrsasign-all-min.js"></script>
@@ -143,8 +144,14 @@
     <div class="hint-text">首次使用？直接输入手机号即可</div>
   </div>
 
-  <!-- 聊天页 -->
-  <div id="chat-page"></div>
+  <!-- 工作台引导页 -->
+  <div id="chat-page" style="display:none;">
+    <div class="app-icon">🔧</div>
+    <div class="app-title">已进入工作台</div>
+    <div class="app-subtitle">点击右下角气泡，开始对话</div>
+    <div style="margin-top:32px; animation: bounce-arrow 2s ease-in-out infinite; font-size:48px;">👇</div>
+    <div style="margin-top:16px; font-size:13px; color:rgba(255,255,255,0.35);">查看工单 · 接单 · 上报完工</div>
+  </div>
 
 
   <script>
