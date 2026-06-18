@@ -262,16 +262,71 @@
         var jwt = signJWT(sessionName);
         var accessToken = await getAccessToken(jwt);
 
+        enterBtn.textContent = '正在验证身份...';
+
+        // === 关键：先通过API创建会话+发身份消息，再让SDK用同一个会话 ===
+        var convId = null;
+        try {
+          // 1. 创建会话
+          var convResp = await fetch('https://api.coze.cn/v1/conversation/create', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+          });
+          var convData = await convResp.json();
+          convId = convData.data && convData.data.id;
+          if (!convId) {
+            console.error('创建会话失败:', convData);
+          } else {
+            console.log('会话已创建:', convId);
+
+            // 2. 往该会话发送身份识别消息（fire-and-forget，不等Bot回复）
+            fetch('https://api.coze.cn/v3/chat', {
+              method: 'POST',
+              headers: {
+                'Authorization': 'Bearer ' + accessToken,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                bot_id: BOT_ID,
+                user_id: phone,
+                conversation_id: convId,
+                stream: false,
+                auto_save_history: true,
+                additional_messages: [{
+                  role: 'user',
+                  content: '[系统]师傅手机号:' + phone,
+                  content_type: 'text'
+                }]
+              })
+            }).then(function(chatResp) { return chatResp.json(); }).then(function(chatData) {
+              console.log('身份消息已发送并处理完成:', chatData);
+            }).catch(function(e) {
+              console.error('身份消息发送失败:', e);
+            });
+          }
+        } catch (e) {
+          console.error('会话创建异常:', e);
+        }
+
         loginPage.style.display = 'none';
         chatPage.style.display = 'block';
 
-        // 直接初始化Coze Chat SDK（已在head预加载）
-        // userInfo.id = 手机号，通过开场白自动传入身份
+        // 3. 初始化Chat SDK，传入预创建的会话ID
+        var sdkConfig = {
+          type: 'bot',
+          bot_id: BOT_ID,
+        };
+        // 如果有预创建的会话，传入conversation_id（SDK可能不支持但不会报错）
+        if (convId) {
+          sdkConfig.conversation_id = convId;
+        }
+
         var chatClient = new CozeWebSDK.WebChatClient({
-          config: {
-            type: 'bot',
-            bot_id: BOT_ID,
-          },
+          config: sdkConfig,
           auth: {
             type: 'token',
             token: accessToken,
@@ -297,51 +352,6 @@
             chatBot: { title: '派单助手', uploadable: false, width: 390 },
           },
         });
-
-        // 自动发送身份消息，让Bot识别师傅
-        setTimeout(async function() {
-          try {
-            // 1. 创建会话
-            var convResp = await fetch('https://api.coze.cn/v1/conversation/create', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + accessToken,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({})
-            });
-            var convData = await convResp.json();
-            var convId = convData.data && convData.data.id;
-            if (!convId) {
-              console.error('创建会话失败:', convData);
-              return;
-            }
-
-            // 2. 发送身份识别消息
-            await fetch('https://api.coze.cn/v3/chat', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + accessToken,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                bot_id: BOT_ID,
-                user_id: phone,
-                conversation_id: convId,
-                stream: false,
-                auto_save_history: true,
-                additional_messages: [{
-                  role: 'user',
-                  content: '[系统]师傅手机号:' + phone,
-                  content_type: 'text'
-                }]
-              })
-            });
-            console.log('身份消息已发送, phone:', phone);
-          } catch (e) {
-            console.error('自动身份消息发送失败:', e);
-          }
-        }, 2000);
       } catch (err) {
         console.error('Auth failed:', err);
         enterBtn.disabled = false;
