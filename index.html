@@ -262,71 +262,15 @@
         var jwt = signJWT(sessionName);
         var accessToken = await getAccessToken(jwt);
 
-        enterBtn.textContent = '正在验证身份...';
-
-        // === 关键：先通过API创建会话+发身份消息，再让SDK用同一个会话 ===
-        var convId = null;
-        try {
-          // 1. 创建会话
-          var convResp = await fetch('https://api.coze.cn/v1/conversation/create', {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + accessToken,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({})
-          });
-          var convData = await convResp.json();
-          convId = convData.data && convData.data.id;
-          if (!convId) {
-            console.error('创建会话失败:', convData);
-          } else {
-            console.log('会话已创建:', convId);
-
-            // 2. 往该会话发送身份识别消息（fire-and-forget，不等Bot回复）
-            fetch('https://api.coze.cn/v3/chat', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + accessToken,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                bot_id: BOT_ID,
-                user_id: phone,
-                conversation_id: convId,
-                stream: false,
-                auto_save_history: true,
-                additional_messages: [{
-                  role: 'user',
-                  content: '[系统]师傅手机号:' + phone,
-                  content_type: 'text'
-                }]
-              })
-            }).then(function(chatResp) { return chatResp.json(); }).then(function(chatData) {
-              console.log('身份消息已发送并处理完成:', chatData);
-            }).catch(function(e) {
-              console.error('身份消息发送失败:', e);
-            });
-          }
-        } catch (e) {
-          console.error('会话创建异常:', e);
-        }
-
         loginPage.style.display = 'none';
         chatPage.style.display = 'block';
 
-        // 3. 初始化Chat SDK，传入预创建的会话ID
-        var sdkConfig = {
-          type: 'bot',
-          bot_id: BOT_ID,
-        };
-        // 如果有预创建的会话，传入conversation_id（SDK可能不支持但不会报错）
-        if (convId) {
-          sdkConfig.conversation_id = convId;
-        }
-
+        // 初始化Chat SDK
         var chatClient = new CozeWebSDK.WebChatClient({
-          config: sdkConfig,
+          config: {
+            type: 'bot',
+            bot_id: BOT_ID,
+          },
           auth: {
             type: 'token',
             token: accessToken,
@@ -352,6 +296,94 @@
             chatBot: { title: '派单助手', uploadable: false, width: 390 },
           },
         });
+
+        // === 方案：通过DOM自动在SDK聊天输入框填入身份消息并发送 ===
+        // 核心思路：等用户点开气泡后，找到SDK渲染的输入框，自动填入并发送
+        var workerPhone = phone;
+        var identityAutoSent = false;
+
+        function tryAutoSendIdentity() {
+          if (identityAutoSent) return;
+
+          // 查找SDK渲染的可见textarea
+          var chatInput = null;
+          var textareas = document.querySelectorAll('textarea');
+          for (var i = 0; i < textareas.length; i++) {
+            if (textareas[i].offsetParent && textareas[i].value === '') {
+              chatInput = textareas[i];
+              break;
+            }
+          }
+
+          // 也查找contenteditable div
+          if (!chatInput) {
+            var editables = document.querySelectorAll('[contenteditable="true"]');
+            for (var i = 0; i < editables.length; i++) {
+              if (editables[i].offsetParent) {
+                chatInput = editables[i];
+                break;
+              }
+            }
+          }
+
+          if (!chatInput) return;
+
+          // 填入身份消息
+          var identityMsg = '[系统]师傅手机号:' + workerPhone;
+          if (chatInput.tagName === 'TEXTAREA') {
+            var nativeSetter = Object.getOwnPropertyDescriptor(
+              window.HTMLTextAreaElement.prototype, 'value'
+            ).set;
+            nativeSetter.call(chatInput, identityMsg);
+            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+          } else if (chatInput.contentEditable === 'true') {
+            chatInput.textContent = identityMsg;
+            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+
+          identityAutoSent = true;
+          console.log('身份消息已填入输入框:', identityMsg);
+
+          // 300ms后尝试发送
+          setTimeout(function() {
+            // 方式1：找发送按钮点击
+            var btns = document.querySelectorAll('button');
+            var sendBtn = null;
+            for (var j = 0; j < btns.length; j++) {
+              var btn = btns[j];
+              var label = (btn.getAttribute('aria-label') || '').toLowerCase();
+              var cls = (btn.className || '').toLowerCase();
+              if ((label.includes('send') || label.includes('发送') ||
+                   cls.includes('send') || cls.includes('submit')) &&
+                  btn.offsetParent && !btn.disabled) {
+                sendBtn = btn;
+                break;
+              }
+            }
+
+            if (sendBtn) {
+              sendBtn.click();
+              console.log('已点击发送按钮');
+            } else {
+              // 方式2：模拟回车键
+              chatInput.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true
+              }));
+              console.log('已模拟回车发送');
+            }
+          }, 300);
+        }
+
+        // 轮询查找聊天输入框（用户点开气泡后才会出现）
+        var pollCount = 0;
+        var autoSendPoll = setInterval(function() {
+          pollCount++;
+          if (identityAutoSent || pollCount > 60) { // 最多等30秒
+            clearInterval(autoSendPoll);
+            return;
+          }
+          tryAutoSendIdentity();
+        }, 500);
       } catch (err) {
         console.error('Auth failed:', err);
         enterBtn.disabled = false;
