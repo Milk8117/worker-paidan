@@ -266,7 +266,7 @@
         }
 
         // 用手机号作为session_name实现会话隔离
-        var sessionName = 'worker_' + phone;
+        var sessionName = 'worker_' + phone + '_' + Date.now();
         var jwt = signJWT(sessionName);
         var accessToken = await getAccessToken(jwt);
 
@@ -403,7 +403,3 @@
       }
     });
   </script>
-
-
-</body>
-</html>
